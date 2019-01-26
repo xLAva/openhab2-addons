@@ -12,12 +12,13 @@
  */
 package org.openhab.binding.hue.internal.handler;
 
-import java.util.AbstractMap.SimpleEntry;
-
 import static org.openhab.binding.hue.internal.HueBindingConstants.*;
 
 import java.math.BigDecimal;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,14 +42,16 @@ import org.eclipse.smarthome.core.thing.ThingStatusDetail;
 import org.eclipse.smarthome.core.thing.ThingTypeUID;
 import org.eclipse.smarthome.core.thing.binding.BaseThingHandler;
 import org.eclipse.smarthome.core.thing.binding.ThingHandler;
+import org.eclipse.smarthome.core.thing.binding.ThingHandlerService;
 import org.eclipse.smarthome.core.types.Command;
 import org.eclipse.smarthome.core.types.UnDefType;
 import org.openhab.binding.hue.internal.FullHueObject;
 import org.openhab.binding.hue.internal.FullLight;
 import org.openhab.binding.hue.internal.HueBridge;
 import org.openhab.binding.hue.internal.State;
-import org.openhab.binding.hue.internal.StateUpdate;
 import org.openhab.binding.hue.internal.State.ColorMode;
+import org.openhab.binding.hue.internal.StateUpdate;
+import org.openhab.binding.hue.internal.action.LightActions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,7 +104,7 @@ public class HueLightHandler extends BaseThingHandler implements LightStatusList
     private boolean isOsramPar16 = false;
 
     private boolean propertiesInitializedSuccessfully = false;
-    private long fadeTime = 400;
+    private long defaultFadeTime = 400;
 
     private @Nullable HueClient hueClient;
 
@@ -125,7 +128,7 @@ public class HueLightHandler extends BaseThingHandler implements LightStatusList
         if (configLightId != null) {
             BigDecimal time = (BigDecimal) getConfig().get(FADETIME);
             if (time != null) {
-                fadeTime = time.longValueExact();
+                defaultFadeTime = time.longValueExact();
             }
 
             lightId = configLightId;
@@ -207,6 +210,10 @@ public class HueLightHandler extends BaseThingHandler implements LightStatusList
 
     @Override
     public void handleCommand(ChannelUID channelUID, Command command) {
+        handleCommand(channelUID.getId(), command, defaultFadeTime);
+    }
+
+    public void handleCommand(String channel, Command command, long fadeTime) {
         HueClient hueBridge = getHueClient();
         if (hueBridge == null) {
             logger.warn("hue bridge handler not found. Cannot handle command without bridge.");
@@ -220,7 +227,7 @@ public class HueLightHandler extends BaseThingHandler implements LightStatusList
         }
 
         StateUpdate lightState = null;
-        switch (channelUID.getId()) {
+        switch (channel) {
             case CHANNEL_COLORTEMPERATURE:
                 if (command instanceof PercentType) {
                     lightState = LightStateConverter.toColorTemperatureLightState((PercentType) command);
@@ -333,7 +340,7 @@ public class HueLightHandler extends BaseThingHandler implements LightStatusList
             }
             hueBridge.updateLightState(light, lightState);
         } else {
-            logger.warn("Command sent to an unknown channel id: {}", channelUID);
+            logger.warn("Command sent to an unknown channel id: {}:{}", getThing().getUID(), channel);
         }
     }
 
@@ -564,5 +571,10 @@ public class HueLightHandler extends BaseThingHandler implements LightStatusList
         }
 
         return delay;
+    }
+
+    @Override
+    public Collection<Class<? extends ThingHandlerService>> getServices() {
+        return Collections.singletonList(LightActions.class);
     }
 }
